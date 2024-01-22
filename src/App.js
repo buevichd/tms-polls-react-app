@@ -57,24 +57,31 @@ function MainPage() {
 }
 
 function ChoiceList({ question, hasVoted, onUpdateVote }) {
+  const [selectedChoiceId, setSelectedChoiceId] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
+
   if (hasVoted) {
+    function onReVote() {
+      setSelectedChoiceId(null);
+      setSuccessMessage(null);
+      onUpdateVote(question, false);
+    }
+
     return (
       <>
+        {successMessage && <p className="text-success">{successMessage}</p>}
         <ul>
           {question.choices.map(choice => (
             <li key={choice.id}>{choice.choice_text} - {choice.votes} votes</li>
           ))}
         </ul>
-        <button className="btn btn-info"
-                onClick={() => onUpdateVote(question, false)}>
+        <button className="btn btn-info" onClick={onReVote}>
           Revote
         </button>
       </>
     );
   }
-
-  const [selectedChoiceId, setSelectedChoiceId] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null);
 
   async function handleVote(e) {
     e.preventDefault();
@@ -87,13 +94,22 @@ function ChoiceList({ question, hasVoted, onUpdateVote }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ choice: selectedChoiceId }),
     };
-    question = await fetcher(`${API_BASE_URL}/api/questions/${question.id}/vote`, requestOptions);
+    try {
+      question = await fetcher(`${API_BASE_URL}/api/questions/${question.id}/vote`, requestOptions);
+    } catch (e) {
+      console.log(e);
+      setErrorMessage('Vote is not supported by API :(');
+      return;
+    }
+    console.log('You successfully voted!');
+    setSuccessMessage('You successfully voted!');
     onUpdateVote(question, true);
   }
 
   function handleChangeSelectedChoice(e) {
     setSelectedChoiceId(e.target.value);
     setErrorMessage(null);
+    setSuccessMessage(null);
   }
 
   return (
