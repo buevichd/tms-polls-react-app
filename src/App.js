@@ -5,7 +5,7 @@ import { useState } from "react";
 // created function to handle API request
 const fetcher = (...args) => fetch(...args).then((res) => res.json());
 
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = 'http://localhost:8000';
 
 function Header() {
   return (
@@ -101,7 +101,6 @@ function ChoiceList({ question, hasVoted, onUpdateVote }) {
       setErrorMessage('Vote is not supported by API :(');
       return;
     }
-    console.log('You successfully voted!');
     setSuccessMessage('You successfully voted!');
     onUpdateVote(question, true);
   }
