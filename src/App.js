@@ -61,6 +61,10 @@ function ChoiceList({ question, hasVoted, onUpdateVote }) {
   const [errorMessage, setErrorMessage] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
 
+  if (!question.choices) {
+    return <p className="text-danger">Question JSON does not have choices.</p>
+  }
+
   if (hasVoted) {
     function onReVote() {
       setSelectedChoiceId(null);
