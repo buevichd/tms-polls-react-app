@@ -5,7 +5,7 @@ This is a simple React JS application for testing polls API.
 # Setup
 
 ```bash
-apt-get install npm
+sudo apt-get install npm
 npm install
 ```
 
