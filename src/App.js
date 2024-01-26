@@ -3,7 +3,16 @@ import { Routes, Route, BrowserRouter, useParams } from 'react-router-dom';
 import { useState } from "react";
 
 // created function to handle API request
-const fetcher = (...args) => fetch(...args).then((res) => res.json());
+function fetcher(...args) {
+  function handleResponse(res) {
+    if (res.status >= 200 && res.status < 300) {
+      return res.json();
+    }
+    throw Error(`API returns status code ${res.status}`);
+  }
+
+  return fetch(...args).then(handleResponse);
+}
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -19,23 +28,75 @@ function Header() {
   );
 }
 
+function PageButton({ page, setPage, text }) {
+  return (
+    <li className="page-item" onClick={() => setPage(page)}>
+      <a className="page-link" href="#">
+        {text || page}
+      </a>
+    </li>
+  );
+}
+
+function Pagination({ page, maxPage, setPage }) {
+  return (
+    <nav>
+      <ul className="pagination">
+        {page > 1 &&
+          <>
+            <PageButton page={1} setPage={setPage} text="&laquo;"/>
+            <PageButton page={page - 1} setPage={setPage}/>
+          </>
+        }
+        <PageButton page={page} setPage={setPage}/>
+        {page < maxPage &&
+          <>
+            <PageButton page={page + 1} setPage={setPage}/>
+            <PageButton page={maxPage} setPage={setPage} text="&raquo;"/>
+          </>
+        }
+      </ul>
+    </nav>
+  );
+}
+
 function QuestionList() {
+  const pageSize = 5;
+  const [page, setPage] = useState(1);
+  const [ordering, setOrdering] = useState('-pub_date')
+
   const {
-    data: questions,
+    data,
     error,
     isValidating,
-  } = useSWR(`${API_BASE_URL}/api/questions/`, fetcher);
+  } = useSWR(`${API_BASE_URL}/api/questions/?page_size=${pageSize}&page=${page}&ordering=${ordering}`, fetcher);
 
   // Handles error and loading state
   if (error) {
-    return <div className='failed'>failed to load</div>;
+    console.log(`Failed to load questions. ${error}`);
+    return <div className='failed'>Failed to load...</div>;
   }
   if (isValidating) {
     return <div className="Loading">Loading...</div>;
   }
 
+  let questions = data;
+  let maxPage = null;
+  const pagingIsSupported = data.hasOwnProperty('results');
+  if (pagingIsSupported) {
+    questions = data.results;
+    maxPage = Math.floor((data.count - 1) / pageSize) + 1;
+  }
+
   return (
     <div>
+      <select value={ordering} onChange={e => setOrdering(e.target.value)}
+              className="form-select form-select-lg mb-3">
+        <option value="pub_date">Pub date (ascending)</option>
+        <option value="-pub_date">Pub date (descending)</option>
+        <option value="question_text">Question Text (ascending)</option>
+        <option value="-question_text">Question Text (descending)</option>
+      </select>
       <ul>
         {questions.map((question) => (
           <li key={question.id}>
@@ -43,6 +104,7 @@ function QuestionList() {
           </li>
         ))}
       </ul>
+      {pagingIsSupported && <Pagination page={page} setPage={setPage} maxPage={maxPage}/>}
     </div>
   );
 }
