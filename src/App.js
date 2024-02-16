@@ -1,30 +1,58 @@
 import useSWR from 'swr';
-import { Routes, Route, BrowserRouter, useParams } from 'react-router-dom';
+import { Routes, Route, BrowserRouter, useParams, useNavigate } from 'react-router-dom';
 import { useState } from "react";
+import { axiosInstance, API_BASE_URL } from "./apiConfig.js";
+import { AuthProvider, useAuth } from "./authProvider";
 
-// created function to handle API request
-function fetcher(...args) {
-  function handleResponse(res) {
-    if (res.status >= 200 && res.status < 300) {
-      return res.json();
-    }
-    throw Error(`API returns status code ${res.status}`);
+
+function handleApiResponse(response) {
+  if (response.status >= 200 && response.status < 300) {
+    return response.data;
   }
-
-  return fetch(...args).then(handleResponse);
+  throw Error(`API returns status code ${response.status} (${response.statusText})`);
 }
 
-const API_BASE_URL = 'http://localhost:8000';
+// function to handle API request
+function fetcher(...args) {
+  return axiosInstance.get(...args).then(handleApiResponse);
+}
+
+const LoginButton = () => {
+  return (
+    <li className="nav-item active">
+      <a className="btn btn-outline-info my-2 my-sm-0" href="/login">Login</a>
+    </li>
+  );
+}
+
+const LogoutButton = () => {
+  const { setToken, setRefreshToken } = useAuth();
+
+  function onLogout() {
+    setToken();
+    setRefreshToken();
+  }
+
+  return (
+    <li className="nav-item active">
+      <button className="btn btn-outline-danger my-2 my-sm-0" onClick={onLogout}>Logout</button>
+    </li>
+  );
+}
 
 function Header() {
+  const { token } = useAuth();
   return (
-    <div className="hstack gap-3">
-      <a href="/">
+    <nav className="navbar navbar-expand-lg navbar-light bg-light">
+      <a className="navbar-brand" href="/">
         <img
           src="https://netstorage.ringcentral.com/appext/logo/kNku72HNQPWCo-uLCKS4Hw~wCZbXGy1Qu-z3dzQ3U_j7Q/b8e47126-bf75-41df-bbf0-844db0a925a4.png"
-          height="40"/>
+          alt='logo' height="40"/>
       </a>
-    </div>
+      <ul className="navbar-nav mr-auto">
+        {token ? <LogoutButton/> : <LoginButton/>}
+      </ul>
+    </nav>
   );
 }
 
@@ -155,13 +183,14 @@ function ChoiceList({ question, hasVoted, onUpdateVote }) {
       setErrorMessage('Please select a choice.');
       return;
     }
-    const requestOptions = {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ choice: selectedChoiceId }),
-    };
+
+
+    const headers = { 'Content-Type': 'application/json' };
+    const body = { choice: selectedChoiceId };
     try {
-      question = await fetcher(`${API_BASE_URL}/api/questions/${question.id}/vote`, requestOptions);
+      question = await axiosInstance
+        .post(`${API_BASE_URL}/api/questions/${question.id}/vote`, body, { headers })
+        .then(handleApiResponse);
     } catch (e) {
       console.log(e);
       setErrorMessage('Vote is not supported by API :(');
@@ -233,13 +262,66 @@ function QuestionDetailPage() {
   );
 }
 
+const Login = () => {
+  const { setToken, setRefreshToken } = useAuth();
+  const navigate = useNavigate();
+
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState();
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    try {
+      const response = await axiosInstance
+        .post(`${API_BASE_URL}/api/token/`, { username, password })
+        .catch((error) => {
+          if (error.response.status === 400 || error.response.status === 401) {
+            setErrorMessage('Invalid login and/or password');
+            return error.response;
+          }
+          throw error;
+        });
+      if (response.data && response.data.access && response.data.refresh) {
+        setToken(response.data.access);
+        setRefreshToken(response.data.refresh);
+        navigate("/", { replace: true });
+      }
+    } catch (e) {
+      console.log(e);
+      setErrorMessage('Obtain token is not supported by API :(');
+    }
+  }
+
+  return <>
+    <Header/>
+    {errorMessage && <div className="alert alert-danger" role="alert">{errorMessage}</div>}
+    <form onSubmit={handleLogin}>
+      <div className="form-group">
+        <label htmlFor="inputLogin">Login</label>
+        <input type="text" className="form-control" id="inputLogin"
+               placeholder="Login" onChange={(e) => setUsername(e.target.value)}/>
+      </div>
+      <div className="form-group">
+        <label htmlFor="inputPassword">Password</label>
+        <input type="password" className="form-control" id="inputPassword"
+               placeholder="Password" onChange={(e) => setPassword(e.target.value)}/>
+      </div>
+      <button type="submit" className="btn btn-primary">Submit</button>
+    </form>
+  </>;
+};
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path='/' element={<MainPage/>}></Route>
-        <Route path='/question/:questionId' element={<QuestionDetailPage/>}></Route>
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path='/' element={<MainPage/>}/>
+          <Route path='/question/:questionId' element={<QuestionDetailPage/>}/>
+          <Route path='/login' element={<Login/>}/>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
